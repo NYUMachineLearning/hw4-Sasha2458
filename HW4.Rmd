@@ -25,7 +25,7 @@ library(glmnet)
 ```
 
 ## The Breast Cancer Dataset
-699 Observations, 11 variables
+699 Observations, 11 variables/attributes/features
 Predictor Variable: Class- benign or malignant 
 
 ```{r load Breast Cancer dataset}
@@ -40,6 +40,9 @@ summary(BreastCancer$Class)
 Filter Methods are generally used as a preprocessing step so the selection of features is independednt of any machine learning algorithms. Features are selected on the basis of their scores in various statistical tests for their correlation with the outcome variable. 
 
 Below we will identify attributes that are highly correlated using Pearson's correlation which is a measure for quantifying linear dependence between X and Y. Ranges between -1 and 1. 
+
+
+Preprocessing set
 
 ```{r correlation}
 BreastCancer_num = transform(BreastCancer, Id = as.numeric(Id), 
@@ -56,7 +59,7 @@ BreastCancer_num = transform(BreastCancer, Id = as.numeric(Id),
 BreastCancer_num[is.na(BreastCancer_num)] = 0
 
 #calculate correlation matrix using pearson correlation (others include spearman and kendall)
-correlation_matrix = cor(BreastCancer_num[,1:10])
+correlation_matrix = cor(BreastCancer_num[,1:10]) 
 
 #visualize correlation matrix
 library(corrplot)
@@ -65,7 +68,7 @@ corrplot(correlation_matrix, order = "hclust")
 #apply correlation filter of 0.7
 highly_correlated <- colnames(BreastCancer[, -1])[findCorrelation(correlation_matrix, cutoff = 0.7, verbose = TRUE)]
 
-#which features are highly correlated and can be removed
+#which features are highly correlated and can be removed; you want to remove those which are highly correlated
 highly_correlated
 ```
 ## Feature Selection Using Wrapper Methods: Recursive Feature Elimination (RFE)
@@ -97,18 +100,21 @@ results = rfe(BreastCancer_num[,1:10], BreastCancer_num[,11], sizes = c(2,5,9), 
 
 results
 results$variables
+plot(results, type =c("g","o"))
+predictors(results)
 ```
 
 ## Feature Selection Using Embedded Methods: Lasso
 
 Least Absolute Shrinkage and Selection Operator (LASSO) regression
 
+embedded method
 
 ```{r Lasso}
 set.seed(24)
 
 #convert data
-x = x <- as.matrix(BreastCancer_num[,1:10])
+x <- as.matrix(BreastCancer_num[,1:10])
 y = as.double(as.matrix(ifelse(BreastCancer_num[,11]=='benign', 0, 1))) 
 
 #fit Lasso model 
@@ -126,6 +132,7 @@ df_coef[df_coef[, 1] != 0, ]
 ## Feature Selection Using Embedded Methods: RandomForest
 Random Forest Importance function and caret package's varImp functions perform similarly.
 
+importance function used for tree based models
 ```{r importance}
 #data
 data(BreastCancer)
@@ -164,6 +171,73 @@ importance(rfmodel)
 
 1. Compare the most important features from at least 2 different classes of feature selection methods covered in this tutorial with any reasonable machine learning dataset from mlbench. Do these feature selection methods provide similar results? 
 
+```{r}
+library(mlbench)
+library(dplyr)
+library(olsrr)
+library(glmnet)
+data <- PimaIndiansDiabetes %>%
+  transform(data, pregnant <- as.numeric(pregnant),
+            glucose <- as.numeric(glucose),
+            pressure <- as.numeric(pressure),
+            triceps <- as.numeric(triceps),
+            insulin <- as.numeric(insulin),
+            mass <- as.numeric(mass),
+            pedigree <- as.numeric(pedigree),
+            age <- as.numeric(age))
+
+```
+
+
+Filter Method: Pearson's Correlation:
+
+```{r}
+#View(data)
+data[is.na(data)] = 0
+cormatrix = cor(data[,1:8]) 
+library(corrplot)
+corrplot(cormatrix, order = "hclust")
+highlycorrelated <- colnames(data[, -9])[findCorrelation(correlation_matrix, cutoff = 0.7, verbose = TRUE)]
+highlycorrelated
+colnames(data)
+```
+
+
+Lasso Regression
+
+```{r}
+set.seed(124)
+data[is.na(data)] = 0
+
+x.dat <- as.matrix(data[,1:8])
+y.dat = as.double(as.matrix(ifelse(data[,9]=='neg', 0, 1))) 
+
+cvlasso <- cv.glmnet(x.dat, y.dat, family='binomial', alpha=1, parallel=TRUE, standardize=TRUE, type.measure='auc')
+
+plot(cvlasso)
+
+cat('Min Lambda: ', cvlasso$lambda.min, '\n 1Sd Lambda: ', cvlasso$lambda.1se)
+dfcoef <- round(as.matrix(coef(cvlasso, s=cvlasso$lambda.min)), 2)
+
+dfcoef[dfcoef[, 1] != 0, ]
+```
+
+When using the filter method, we see that pressure and triceps are highly correlated which would result in us using pregnancy, glucose, mass, insulin, pedigree and age in order to train the mild. When using the Lasso regression, very similar features to that of the highly correlated method are the result. These features include: pregnancy, glucose, mass, pedigree, and age.
+
+
 2. Attempt a feature selection method not covered in this tutorial (backward elimination, forward propogation, etc.)
 
+Backwards Elimination
+
+```{r}
+model <- lm( pregnant~ ., data = data)
+ols_step_backward_p(model)
+plot(ols_step_backward_p(model))
+ols_step_backward_p(model, details = T)
+
+
+#or
+
+step(object = model, direction = "backward")
+```
 
